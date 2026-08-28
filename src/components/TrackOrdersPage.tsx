@@ -175,9 +175,20 @@ export const TrackOrdersPage: React.FC<TrackOrdersPageProps> = ({
                             <div className="font-mono font-bold text-xs text-gray-800">{order.id}</div>
                             <div className="text-emerald-600 font-bold text-xs">${order.price.toFixed(2)}</div>
                           </div>
-                          <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-full flex items-center gap-1">
-                            <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Delivered
-                          </span>
+
+                          {order.status === 'Completed' || order.status === ('Delivered' as any) ? (
+                            <span className="px-2.5 py-1 bg-emerald-100 text-emerald-800 text-[10px] font-bold rounded-full flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Completed
+                            </span>
+                          ) : order.status === 'Cancelled' ? (
+                            <span className="px-2.5 py-1 bg-rose-100 text-rose-800 text-[10px] font-bold rounded-full flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3 text-rose-600" /> Cancelled
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 bg-amber-100 text-amber-800 text-[10px] font-bold rounded-full flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-amber-600" /> Pending Delivery
+                            </span>
+                          )}
                         </div>
                       </div>
                     </motion.div>

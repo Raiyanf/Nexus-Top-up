@@ -25,7 +25,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Product, TopupOption, PaymentCategory, PAYMENT_METHODS, TOPUP_OPTIONS, OrderRecord } from '../types';
-import { User } from '../firebase';
+import { User, createOrderInDb } from '../firebase';
 
 interface ProductDetailPageProps {
   product: Product;
@@ -130,8 +130,8 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
 
     const generatedId = 'NEX-' + Math.floor(100000 + Math.random() * 900000);
 
-    // Simulate instant delivery on game server
-    setTimeout(() => {
+    // Process order and persist to Realtime Database
+    setTimeout(async () => {
       setIsProcessing(false);
       setCompletedOrderId(generatedId);
       setOrderCompleted(true);
@@ -146,11 +146,18 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
         amount: selectedOption.amount,
         price: selectedOption.price,
         paymentCategory: paymentCategory.toUpperCase(),
-        status: 'Delivered',
+        status: 'Pending',
         timestamp: new Date().toLocaleString(),
+        userId: currentUser?.uid || undefined,
         userEmail: currentUser?.email || undefined,
         userDisplayName: currentUser?.displayName || undefined
       };
+
+      try {
+        await createOrderInDb(record);
+      } catch (err) {
+        console.error('Failed to write order to RTDB:', err);
+      }
 
       onOrderPlaced(record);
       window.scrollTo({ top: 0, behavior: 'smooth' });

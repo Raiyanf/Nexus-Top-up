@@ -19,38 +19,62 @@ import {
   ExternalLink,
   ChevronRight,
   Sparkles,
-  CreditCard
+  CreditCard,
+  Shield,
+  Lock,
+  X,
+  AlertCircle
 } from 'lucide-react';
-import { motion } from 'motion/react';
-import { User, signOut, auth } from '../firebase';
-import { OrderRecord } from '../types';
+import { motion, AnimatePresence } from 'motion/react';
+import { User, signOut, auth, ADMIN_EMAILS } from '../firebase';
+import { OrderRecord, UserProfile } from '../types';
 
 interface ProfilePageProps {
   currentUser: User | null;
+  currentUserProfile: UserProfile | null;
   orders: OrderRecord[];
-  walletBalance: number;
   onOpenAuthModal: () => void;
   onGoHome: () => void;
   onGoTrackOrders: () => void;
-  onGoAddMoney: () => void;
+  onGoAdminPanel: () => void;
 }
 
 export const ProfilePage: React.FC<ProfilePageProps> = ({
   currentUser,
+  currentUserProfile,
   orders,
-  walletBalance,
   onOpenAuthModal,
   onGoHome,
   onGoTrackOrders,
-  onGoAddMoney
+  onGoAdminPanel
 }) => {
-  const totalSpent = orders.reduce((acc, curr) => acc + (curr.price || 0), 0);
+  const [isAdminPinModalOpen, setIsAdminPinModalOpen] = useState(false);
+  const [adminPin, setAdminPin] = useState('');
+  const [pinError, setPinError] = useState<string | null>(null);
+
+  const totalSpent = orders.reduce((acc, curr) => acc + (curr.price || 0), currentUserProfile?.totalSpent || 0);
+  const walletBalance = currentUserProfile?.walletBalance || 0;
+  
+  const isAdmin = currentUserProfile?.role === 'admin' || (currentUser?.email ? ADMIN_EMAILS.includes(currentUser.email.toLowerCase()) : false);
 
   const handleSignOut = async () => {
     try {
       await signOut(auth);
     } catch (e) {
       console.error('Sign out error', e);
+    }
+  };
+
+  const handleVerifyPin = (e: React.FormEvent) => {
+    e.preventDefault();
+    // 4-digit PIN verification (Default: 1234)
+    if (adminPin.trim() === '1234') {
+      setIsAdminPinModalOpen(false);
+      setAdminPin('');
+      setPinError(null);
+      onGoAdminPanel();
+    } else {
+      setPinError('Incorrect 4-digit PIN. Default PIN is 1234.');
     }
   };
 
@@ -101,20 +125,34 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
               <div className="flex-1 text-center sm:text-left">
                 <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mb-1">
                   <h2 className="text-xl sm:text-2xl font-bold text-gray-950">
-                    {currentUser.displayName || 'Google User'}
+                    {currentUser.displayName || 'Nexus Player'}
                   </h2>
-                  <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-[10px] rounded-full flex items-center gap-1">
-                    <ShieldCheck className="w-3 h-3" /> Verified Google Account
-                  </span>
+                  
+                  {isAdmin ? (
+                    <span className="px-2.5 py-0.5 bg-amber-400 text-black font-extrabold text-[10px] rounded-full flex items-center gap-1 uppercase tracking-wider shadow-xs">
+                      <Shield className="w-3 h-3" /> Admin
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-0.5 bg-emerald-50 text-emerald-700 font-bold text-[10px] rounded-full flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3" /> Verified Player
+                    </span>
+                  )}
                 </div>
 
                 <p className="text-xs sm:text-sm text-gray-500 font-medium mb-3 flex items-center justify-center sm:justify-start gap-1.5">
                   <Mail className="w-3.5 h-3.5" /> {currentUser.email}
                 </p>
 
-                <div className="inline-flex items-center gap-2 bg-emerald-50 text-emerald-800 px-3 py-1.5 rounded-xl text-xs font-semibold border border-emerald-200/60">
-                  <Zap className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Instant Delivery Active</span>
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                  <div className="inline-flex items-center gap-1.5 bg-emerald-50 text-emerald-800 px-3 py-1.5 rounded-xl text-xs font-semibold border border-emerald-200/60">
+                    <Zap className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Instant Delivery Active</span>
+                  </div>
+
+                  <div className="inline-flex items-center gap-1.5 bg-gray-100 text-gray-700 px-3 py-1.5 rounded-xl text-xs font-semibold">
+                    <CreditCard className="w-3.5 h-3.5 text-gray-500" />
+                    <span>Wallet Balance: <strong>${walletBalance.toFixed(2)}</strong></span>
+                  </div>
                 </div>
               </div>
 
@@ -127,29 +165,35 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
               </button>
             </div>
 
-            {/* Wallet Banner Card */}
-            <div className="bg-gradient-to-r from-gray-900 via-black to-gray-900 text-white rounded-3xl p-6 sm:p-7 shadow-lg border border-gray-800 flex flex-col sm:flex-row items-center justify-between gap-5">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center border border-white/15">
-                  <Sparkles className="w-7 h-7 text-amber-400" />
+            {/* ADMIN PANEL ACCESS CARD (ONLY VISIBLE FOR ADMINS) */}
+            {isAdmin && (
+              <div className="bg-gradient-to-r from-gray-950 via-gray-900 to-black text-white rounded-3xl p-6 sm:p-7 border border-amber-500/30 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-5 relative overflow-hidden">
+                <div className="flex items-center gap-4 relative z-10">
+                  <div className="w-14 h-14 rounded-2xl bg-amber-400/20 border border-amber-400/30 flex items-center justify-center text-amber-400">
+                    <Shield className="w-7 h-7" />
+                  </div>
+                  <div>
+                    <div className="text-xs text-amber-400 font-extrabold uppercase tracking-wider flex items-center gap-1 mb-0.5">
+                      <Lock className="w-3 h-3" /> Admin Privileges Enabled
+                    </div>
+                    <div className="text-xl sm:text-2xl font-black tracking-tight">
+                      Admin Control Panel
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Manage real-time incoming orders, player UIDs, user balances and roles.
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <div className="text-xs text-gray-400 font-semibold mb-0.5">Nexus Wallet Balance</div>
-                  <div className="text-3xl font-extrabold tracking-tight">৳{walletBalance.toFixed(2)} BDT</div>
-                  <p className="text-[11px] text-emerald-400 flex items-center gap-1 mt-0.5">
-                    <Check className="w-3 h-3" /> Ready for 1-click game top-ups
-                  </p>
-                </div>
-              </div>
 
-              <button
-                onClick={onGoAddMoney}
-                className="w-full sm:w-auto px-6 py-3.5 bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs sm:text-sm rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <Zap className="w-4 h-4" />
-                <span>Add Money (টাকা রিচার্জ)</span>
-              </button>
-            </div>
+                <button
+                  onClick={() => setIsAdminPinModalOpen(true)}
+                  className="w-full sm:w-auto px-6 py-3.5 bg-amber-400 hover:bg-amber-300 text-black font-extrabold text-xs sm:text-sm rounded-2xl transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer relative z-10 shrink-0"
+                >
+                  <Key className="w-4 h-4" />
+                  <span>Open Admin Panel</span>
+                </button>
+              </div>
+            )}
 
             {/* Account Metrics Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
@@ -158,7 +202,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                   <History className="w-3.5 h-3.5 text-blue-600" /> Total Orders
                 </div>
                 <div className="text-2xl font-extrabold text-gray-900">{orders.length}</div>
-                <p className="text-[10px] text-gray-400 mt-0.5">Top-up transactions</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">All-time top-ups</p>
               </div>
 
               <div className="bg-white p-5 rounded-3xl border border-black/5 shadow-xs">
@@ -166,14 +210,16 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                   <CreditCard className="w-3.5 h-3.5 text-emerald-600" /> Total Spent
                 </div>
                 <div className="text-2xl font-extrabold text-emerald-600">${totalSpent.toFixed(2)}</div>
-                <p className="text-[10px] text-gray-400 mt-0.5">~ ৳{(totalSpent * 125).toFixed(0)} BDT</p>
+                <p className="text-[10px] text-gray-400 mt-0.5">Verified transactions</p>
               </div>
 
               <div className="col-span-2 sm:col-span-1 bg-white p-5 rounded-3xl border border-black/5 shadow-xs">
                 <div className="text-xs text-gray-400 font-medium mb-1 flex items-center gap-1.5">
-                  <Zap className="w-3.5 h-3.5 text-amber-500" /> Delivery Tier
+                  <Zap className="w-3.5 h-3.5 text-amber-500" /> Account Status
                 </div>
-                <div className="text-xl font-bold text-gray-900">VIP Instant</div>
+                <div className="text-xl font-bold text-gray-900">
+                  {isAdmin ? 'Super Admin' : 'VIP Member'}
+                </div>
                 <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">Zero Queuing Active</p>
               </div>
             </div>
@@ -192,7 +238,7 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
                   </div>
                   <div>
                     <div className="text-xs sm:text-sm font-bold text-gray-900">View All Order Receipts</div>
-                    <div className="text-[11px] text-gray-500">Track {orders.length} past top-ups and copy invoice codes</div>
+                    <div className="text-[11px] text-gray-500">Track your past purchases and delivery status</div>
                   </div>
                 </div>
                 <ChevronRight className="w-4 h-4 text-gray-400" />
@@ -245,6 +291,77 @@ export const ProfilePage: React.FC<ProfilePageProps> = ({
           </div>
         )}
       </div>
+
+      {/* 4-DIGIT ADMIN PIN VERIFICATION MODAL */}
+      <AnimatePresence>
+        {isAdminPinModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-3xl max-w-sm w-full p-6 sm:p-7 shadow-2xl border border-black/10 text-center"
+            >
+              <div className="w-14 h-14 rounded-2xl bg-amber-100 text-amber-900 flex items-center justify-center mx-auto mb-4 border border-amber-200">
+                <Lock className="w-7 h-7" />
+              </div>
+
+              <h3 className="text-lg font-bold text-gray-900 mb-1">
+                Enter 4-Digit Admin PIN
+              </h3>
+              <p className="text-xs text-gray-500 mb-5 leading-relaxed">
+                Please enter your security PIN to access the Admin Console. (Default: <strong>1234</strong>)
+              </p>
+
+              <form onSubmit={handleVerifyPin} className="space-y-4">
+                <div>
+                  <input
+                    type="password"
+                    maxLength={4}
+                    autoFocus
+                    placeholder="••••"
+                    value={adminPin}
+                    onChange={(e) => {
+                      setAdminPin(e.target.value.replace(/\D/g, '').slice(0, 4));
+                      setPinError(null);
+                    }}
+                    className="w-full tracking-[1em] text-center text-2xl font-mono py-3 bg-[#F6F6F8] rounded-2xl border border-gray-200 focus:border-amber-400 focus:bg-white focus:ring-2 focus:ring-amber-400/20 outline-none transition-all font-bold"
+                  />
+                </div>
+
+                {pinError && (
+                  <div className="flex items-center gap-1.5 text-xs text-red-600 bg-red-50 p-2.5 rounded-xl border border-red-200 text-left">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{pinError}</span>
+                  </div>
+                )}
+
+                <div className="flex gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsAdminPinModalOpen(false);
+                      setAdminPin('');
+                      setPinError(null);
+                    }}
+                    className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-2xl text-xs sm:text-sm cursor-pointer transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-3 bg-black hover:bg-gray-800 text-white font-bold rounded-2xl text-xs sm:text-sm shadow-md flex items-center justify-center gap-1.5 cursor-pointer transition-all"
+                  >
+                    <Key className="w-4 h-4 text-amber-400" />
+                    <span>Unlock</span>
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
+

@@ -37,6 +37,32 @@ export interface PaymentMethodOption {
   iconName: string;
 }
 
+export type OrderStatus = 'Pending' | 'Completed' | 'Cancelled';
+
+export interface AddMoneyRecord {
+  id: string;
+  userId: string;
+  userEmail?: string;
+  userDisplayName?: string;
+  amount: number;
+  method: string;
+  trxId: string;
+  status: 'Approved' | 'Pending' | 'Rejected';
+  timestamp: string;
+}
+
+export interface UserProfile {
+  uid: string;
+  displayName: string;
+  email: string;
+  photoURL?: string;
+  role: 'user' | 'admin';
+  walletBalance: number;
+  totalSpent: number;
+  createdAt: string;
+  lastLoginAt: string;
+}
+
 export interface OrderRecord {
   id: string;
   productId: string;
@@ -47,8 +73,9 @@ export interface OrderRecord {
   amount: string;
   price: number;
   paymentCategory: string;
-  status: 'Delivered' | 'Processing' | 'Completed';
+  status: OrderStatus;
   timestamp: string;
+  userId?: string;
   userEmail?: string;
   userDisplayName?: string;
 }

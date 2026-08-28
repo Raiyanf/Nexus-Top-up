@@ -21,7 +21,8 @@ import {
   History
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { User } from '../firebase';
+import { User, updateUserBalanceInDb, createAddMoneyRecordInDb } from '../firebase';
+import { AddMoneyRecord } from '../types';
 
 interface AddMoneyPageProps {
   currentUser: User | null;
@@ -46,7 +47,7 @@ interface MfsConfig {
 
 const MFS_CONFIGS: Record<MfsMethod, MfsConfig> = {
   bkash: {
-    name: 'bKash (বিকাশ)',
+    name: 'bKash',
     number: '01889543210',
     type: 'Personal (Send Money)',
     color: 'text-pink-600',
@@ -54,14 +55,15 @@ const MFS_CONFIGS: Record<MfsMethod, MfsConfig> = {
     borderColor: 'border-pink-200',
     accentColor: 'bg-pink-600',
     instructions: [
-      'আপনার bKash অ্যাপ অথবা *247# ডায়াল করে "Send Money" অপশনে যান।',
-      'নিচে দেওয়া পার্সোনাল বিকাশ নম্বরে সঠিক টাকা সেন্ড মানি করুন।',
-      'সেন্ড মানি সফল হলে ফিরতি SMS বা স্টেটমেন্ট থেকে প্রাপ্ত "TrxID" (যেমন: BLK893XZ2) কপি করুন।',
-      'নিচের ঘরে TrxID বসিয়ে "Verify Payment" বাটনে ক্লিক করুন।'
+      'Open your bKash app or dial *247# and select "Send Money".',
+      'Enter the personal bKash account number shown below.',
+      'Enter the exact recharge amount and confirm the transaction.',
+      'Copy the Transaction ID (TrxID, e.g. BLK893XZ2) from the confirmation SMS or statement.',
+      'Paste the TrxID in the box below and click "Verify Payment".'
     ]
   },
   nagad: {
-    name: 'Nagad (নগদ)',
+    name: 'Nagad',
     number: '01712345678',
     type: 'Personal (Send Money)',
     color: 'text-orange-600',
@@ -69,14 +71,14 @@ const MFS_CONFIGS: Record<MfsMethod, MfsConfig> = {
     borderColor: 'border-orange-200',
     accentColor: 'bg-orange-600',
     instructions: [
-      'আপনার Nagad অ্যাপ অথবা *167# ডায়াল করে "Send Money" অপশনে যান।',
-      'নিচে দেওয়া নগদ নম্বরে সঠিক অ্যামাউন্ট সেন্ড মানি করুন।',
-      'ট্রানজেকশন সম্পন্ন হওয়ার পর Nagad TrxID (যেমন: 7HJK98MN) কপি করুন।',
-      'নিচের ঘরে TrxID বসিয়ে ভেরিফাই করুন।'
+      'Open your Nagad app or dial *167# and select "Send Money".',
+      'Send the exact recharge amount to the personal Nagad number provided below.',
+      'Copy the 8-digit Nagad TrxID (e.g. 7HJK98MN) from the SMS.',
+      'Enter the TrxID below and click "Verify Payment" to credit your wallet.'
     ]
   },
   rocket: {
-    name: 'Rocket (রকেট)',
+    name: 'Rocket',
     number: '01987654321-4',
     type: 'Personal (Send Money)',
     color: 'text-purple-600',
@@ -84,10 +86,10 @@ const MFS_CONFIGS: Record<MfsMethod, MfsConfig> = {
     borderColor: 'border-purple-200',
     accentColor: 'bg-purple-600',
     instructions: [
-      'আপনার Rocket অ্যাপ অথবা *322# ডায়াল করে "Send Money" অপশনে যান।',
-      'উপরে উল্লিখিত ১২ ডিজিটের রকেট নম্বরে টাকা সেন্ড মানি করুন।',
-      'ট্রানজেকশন সফল হলে পাওয়া Transaction ID কপি করুন।',
-      'নিচের ইনপুট বক্সে ট্রানজেকশন আইডি দিয়ে ভেরিফাই করুন।'
+      'Open your Rocket app or dial *322# and select "Send Money".',
+      'Send the exact amount to the 12-digit personal Rocket number above.',
+      'Copy the Transaction ID from the receipt.',
+      'Enter the Transaction ID below and verify to receive instant wallet balance.'
     ]
   }
 };
@@ -107,7 +109,6 @@ export const AddMoneyPage: React.FC<AddMoneyPageProps> = ({
   const [selectedMethod, setSelectedMethod] = useState<MfsMethod>('bkash');
   const [trxId, setTrxId] = useState('');
   const [copiedNumber, setCopiedNumber] = useState(false);
-  const [copiedTrxExample, setCopiedTrxExample] = useState(false);
   
   // Verification states
   const [isVerifying, setIsVerifying] = useState(false);
@@ -126,7 +127,7 @@ export const AddMoneyPage: React.FC<AddMoneyPageProps> = ({
 
   const handleContinueToPayment = () => {
     if (numAmount < 10) {
-      setErrorMsg('সর্বনিম্ন ১০ টাকা অ্যাড করা যাবে।');
+      setErrorMsg('Minimum deposit amount is ৳10 BDT.');
       return;
     }
     setErrorMsg(null);
@@ -136,24 +137,44 @@ export const AddMoneyPage: React.FC<AddMoneyPageProps> = ({
 
   const handleVerifyTrx = () => {
     if (!trxId.trim()) {
-      setErrorMsg('অনুগ্রহ করে সেন্ড মানি করার পর পাওয়া ট্রানজেকশন আইডি (TrxID) লিখুন।');
+      setErrorMsg('Please enter the Transaction ID (TrxID) received from your payment.');
       return;
     }
 
     if (trxId.trim().length < 6) {
-      setErrorMsg('অনুগ্রহ করে সঠিক ফরম্যাটের TrxID (কমপক্ষে ৬ সংখ্যার) লিখুন।');
+      setErrorMsg('Please enter a valid TrxID (at least 6 characters).');
       return;
     }
 
     setErrorMsg(null);
     setIsVerifying(true);
 
-    // Simulate verification
-    setTimeout(() => {
+    // Save transaction and sync balance to Firebase RTDB
+    setTimeout(async () => {
       setIsVerifying(false);
       const newBal = walletBalance + numAmount;
+      const cleanTrx = trxId.trim().toUpperCase();
       setVerifiedAmount(numAmount);
-      setLastTrxId(trxId.trim().toUpperCase());
+      setLastTrxId(cleanTrx);
+
+      const record: AddMoneyRecord = {
+        id: 'AM-' + Math.floor(100000 + Math.random() * 900000),
+        userId: currentUser?.uid || 'guest_' + Date.now(),
+        userEmail: currentUser?.email || undefined,
+        userDisplayName: currentUser?.displayName || undefined,
+        amount: numAmount,
+        method: selectedMethod,
+        trxId: cleanTrx,
+        status: 'Approved',
+        timestamp: new Date().toLocaleString()
+      };
+
+      try {
+        await createAddMoneyRecordInDb(record);
+      } catch (err) {
+        console.error('Failed to save add money record to RTDB:', err);
+      }
+
       onBalanceUpdated(newBal);
       setStep(3);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -170,13 +191,13 @@ export const AddMoneyPage: React.FC<AddMoneyPageProps> = ({
             className="inline-flex items-center gap-1.5 text-xs sm:text-sm font-bold text-gray-700 hover:text-black transition-colors px-2 py-1 -ml-2 rounded-lg hover:bg-gray-100 cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>{step === 2 ? 'অ্যামাউন্ট পরিবর্তন করুন' : 'হোম পেজে ফিরে যান'}</span>
+            <span>{step === 2 ? 'Change Amount' : 'Back to Store'}</span>
           </button>
           
           <div className="flex items-center gap-2">
             <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full flex items-center gap-1">
               <Wallet className="w-3.5 h-3.5" />
-              <span>ব্যালেন্স: ৳{walletBalance.toFixed(2)}</span>
+              <span>Balance: ৳{walletBalance.toFixed(2)} BDT</span>
             </span>
           </div>
         </div>
@@ -191,14 +212,14 @@ export const AddMoneyPage: React.FC<AddMoneyPageProps> = ({
             <div>
               <div className="flex items-center gap-2 text-xs text-gray-300 font-medium mb-1">
                 <Wallet className="w-4 h-4 text-emerald-400" />
-                <span>NEXUS Wallet (ওয়ালেট পে)</span>
+                <span>NEXUS Wallet Pay</span>
               </div>
               <div className="text-3xl sm:text-4xl font-extrabold tracking-tight">
                 ৳{walletBalance.toFixed(2)} <span className="text-xs font-normal text-gray-400">BDT</span>
               </div>
               {currentUser && (
                 <p className="text-[11px] text-gray-400 mt-1 font-medium">
-                  অ্যাকাউন্ট: {currentUser.displayName || currentUser.email}
+                  Account: {currentUser.displayName || currentUser.email}
                 </p>
               )}
             </div>
@@ -206,7 +227,7 @@ export const AddMoneyPage: React.FC<AddMoneyPageProps> = ({
             <div className="flex items-center gap-2">
               <span className="px-3 py-1.5 bg-white/10 backdrop-blur-md rounded-xl text-xs font-semibold flex items-center gap-1.5 border border-white/10">
                 <Zap className="w-3.5 h-3.5 text-amber-400" />
-                <span>০% অতিরিক্ত চার্জ</span>
+                <span>0% Extra Fees</span>
               </span>
             </div>
           </div>
@@ -221,10 +242,10 @@ export const AddMoneyPage: React.FC<AddMoneyPageProps> = ({
           >
             <div className="mb-6">
               <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-1">
-                ওয়ালেটে টাকা যোগ করুন (Add Money)
+                Add Funds to Wallet
               </h2>
               <p className="text-xs sm:text-sm text-gray-500">
-                কত টাকা ওয়ালেটে জমা করতে চান তা লিখুন অথবা কুইক সিলেক্টর থেকে নির্বাচন করুন।
+                Enter the amount of BDT you wish to add to your account balance, or pick from quick presets.
               </p>
             </div>
 
@@ -238,7 +259,7 @@ export const AddMoneyPage: React.FC<AddMoneyPageProps> = ({
             {/* Amount input */}
             <div className="mb-6">
               <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-2">
-                টাকার পরিমাণ লিখুন (BDT)
+                Deposit Amount (BDT ৳)
               </label>
               <div className="relative">
                 <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xl font-bold text-gray-400">
@@ -258,14 +279,14 @@ export const AddMoneyPage: React.FC<AddMoneyPageProps> = ({
                 />
               </div>
               <p className="text-[11px] text-gray-400 mt-1.5">
-                সর্বনিম্ন ১০ টাকা এবং সর্বোচ্চ ৫০,০০০ টাকা একবারে যোগ করা যাবে।
+                Minimum deposit is ৳10 BDT and maximum is ৳50,000 BDT per transaction.
               </p>
             </div>
 
             {/* Quick Amount Pills */}
             <div className="mb-8">
               <label className="block text-xs font-bold uppercase tracking-wider text-gray-600 mb-2.5">
-                কুইক অ্যামাউন্ট
+                Quick Select Presets
               </label>
               <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
                 {QUICK_AMOUNTS.map((amt) => (
@@ -294,7 +315,7 @@ export const AddMoneyPage: React.FC<AddMoneyPageProps> = ({
               onClick={handleContinueToPayment}
               className="w-full bg-black hover:bg-black/85 text-white py-4 rounded-2xl font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2 shadow-md active:scale-[0.99] cursor-pointer"
             >
-              <span>কন্টিনিউ করুন (৳{numAmount || 0})</span>
+              <span>Continue (৳{numAmount || 0} BDT)</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </motion.div>
@@ -310,25 +331,25 @@ export const AddMoneyPage: React.FC<AddMoneyPageProps> = ({
             {/* Header / Selected Amount summary */}
             <div className="bg-white rounded-3xl p-5 sm:p-6 border border-black/5 shadow-xs flex items-center justify-between">
               <div>
-                <span className="text-xs text-gray-400 font-medium">যোগ করার অ্যামাউন্ট</span>
-                <div className="text-2xl font-extrabold text-gray-900">৳{numAmount.toFixed(2)}</div>
+                <span className="text-xs text-gray-400 font-medium">Recharge Amount</span>
+                <div className="text-2xl font-extrabold text-gray-900">৳{numAmount.toFixed(2)} BDT</div>
               </div>
               <button
                 type="button"
                 onClick={() => setStep(1)}
                 className="text-xs font-bold text-blue-600 hover:underline cursor-pointer"
               >
-                অ্যামাউন্ট পরিবর্তন
+                Change Amount
               </button>
             </div>
 
             {/* 3 MFS Tabs */}
             <div className="bg-white rounded-3xl p-6 sm:p-8 border border-black/5 shadow-xs">
               <h3 className="text-base font-bold text-gray-900 mb-1">
-                পেমেন্ট মেথড নির্বাচন করুন
+                Select Mobile Banking Gateway
               </h3>
               <p className="text-xs text-gray-500 mb-4">
-                যেকোনো একটি মেথড সিলেক্ট করে নিচে দেওয়া নাম্বারে সেন্ড মানি করুন।
+                Select your preferred mobile wallet and Send Money to the authorized account number below.
               </p>
 
               {/* Tabs */}
@@ -352,7 +373,7 @@ export const AddMoneyPage: React.FC<AddMoneyPageProps> = ({
                       }`}
                     >
                       <span className={`w-2.5 h-2.5 rounded-full ${cfg.accentColor}`} />
-                      <span className="truncate">{cfg.name.split(' ')[0]}</span>
+                      <span className="truncate">{cfg.name}</span>
                     </button>
                   );
                 })}
@@ -363,7 +384,7 @@ export const AddMoneyPage: React.FC<AddMoneyPageProps> = ({
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-3 border-b border-black/5">
                   <div>
                     <span className="text-[11px] font-bold uppercase text-gray-500">
-                      {currentConfig.name} {currentConfig.type} নাম্বার
+                      {currentConfig.name} {currentConfig.type} Number
                     </span>
                     <div className="text-2xl sm:text-3xl font-mono font-extrabold text-gray-950 mt-0.5 tracking-wider">
                       {currentConfig.number}
@@ -378,12 +399,12 @@ export const AddMoneyPage: React.FC<AddMoneyPageProps> = ({
                     {copiedNumber ? (
                       <>
                         <Check className="w-4 h-4 text-emerald-600" />
-                        <span className="text-emerald-700">নাম্বার কপি হয়েছে!</span>
+                        <span className="text-emerald-700">Copied!</span>
                       </>
                     ) : (
                       <>
                         <Copy className="w-4 h-4" />
-                        <span>নাম্বার কপি করুন</span>
+                        <span>Copy Number</span>
                       </>
                     )}
                   </button>
@@ -391,7 +412,7 @@ export const AddMoneyPage: React.FC<AddMoneyPageProps> = ({
 
                 {/* Step-by-step instructions */}
                 <div className="space-y-2 text-xs text-gray-700">
-                  <p className="font-bold text-gray-900">কিভাবে টাকা পাঠাবেন:</p>
+                  <p className="font-bold text-gray-900">How to send payment:</p>
                   <ol className="list-decimal list-inside space-y-1.5 pl-1 leading-relaxed text-[11px] sm:text-xs">
                     {currentConfig.instructions.map((inst, i) => (
                       <li key={i}>{inst}</li>
@@ -404,11 +425,11 @@ export const AddMoneyPage: React.FC<AddMoneyPageProps> = ({
               <div className="space-y-4">
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1.5">
-                    ট্রানজেকশন আইডি লিখুন (TrxID) <span className="text-red-500">*</span>
+                    Enter Transaction ID (TrxID) <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
-                    placeholder="যেমন: BLK987654X অথবা 7HJK98MN"
+                    placeholder="e.g. BLK987654X or 7HJK98MN"
                     value={trxId}
                     onChange={(e) => {
                       setTrxId(e.target.value);
@@ -417,7 +438,7 @@ export const AddMoneyPage: React.FC<AddMoneyPageProps> = ({
                     className="w-full px-4 py-3.5 bg-[#F8F9FA] rounded-2xl border-2 border-gray-200 focus:border-black focus:bg-white focus:ring-4 focus:ring-black/5 outline-none text-sm sm:text-base font-mono font-bold uppercase transition-all"
                   />
                   <p className="text-[11px] text-gray-500 mt-1.5">
-                    টাকা পাঠানোর পর বিকাশ/নগদ/রকেট থেকে এসএমএস-এ আসা TrxID দিন।
+                    Enter the TrxID received in your SMS notification after completing the Send Money transfer.
                   </p>
                 </div>
 
@@ -437,12 +458,12 @@ export const AddMoneyPage: React.FC<AddMoneyPageProps> = ({
                   {isVerifying ? (
                     <div className="flex items-center gap-2">
                       <div className="w-4 h-4 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-                      <span>ভেরিফাই করা হচ্ছে...</span>
+                      <span>Verifying Transaction...</span>
                     </div>
                   ) : (
                     <>
                       <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                      <span>পেমেন্ট ভেরিফাই করুন (Verify Payment)</span>
+                      <span>Verify & Credit Wallet</span>
                     </>
                   )}
                 </button>
@@ -463,24 +484,24 @@ export const AddMoneyPage: React.FC<AddMoneyPageProps> = ({
             </div>
 
             <h2 className="text-2xl font-bold text-gray-900 mb-1">
-              টাকা সফলভাবে যোগ হয়েছে!
+              Funds Added Successfully!
             </h2>
             <p className="text-xs sm:text-sm text-gray-500 mb-6">
-              আপনার ওয়ালেটে ৳{verifiedAmount.toFixed(2)} টাকা সাথে সাথে যুক্ত করে দেওয়া হয়েছে।
+              ৳{verifiedAmount.toFixed(2)} BDT has been credited to your Nexus Wallet instantly.
             </p>
 
             {/* Receipt Summary */}
             <div className="bg-[#F8F9FA] rounded-2xl p-5 border border-black/5 text-left mb-6 space-y-2.5 text-xs text-gray-700">
               <div className="flex justify-between items-center pb-2 border-b border-gray-200">
-                <span className="text-gray-400">নতুন ব্যালেন্স</span>
+                <span className="text-gray-400">New Wallet Balance</span>
                 <span className="text-base font-extrabold text-emerald-600">৳{walletBalance.toFixed(2)} BDT</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-gray-400">যোগকৃত টাকা</span>
-                <span className="font-bold text-gray-900">৳{verifiedAmount.toFixed(2)}</span>
+                <span className="text-gray-400">Amount Added</span>
+                <span className="font-bold text-gray-900">৳{verifiedAmount.toFixed(2)} BDT</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-gray-400">মেথড</span>
+                <span className="text-gray-400">Gateway</span>
                 <span className="font-semibold text-gray-900 uppercase">{selectedMethod} Send Money</span>
               </div>
               <div className="flex justify-between items-center">
@@ -488,7 +509,7 @@ export const AddMoneyPage: React.FC<AddMoneyPageProps> = ({
                 <span className="font-mono font-bold text-gray-900">{lastTrxId}</span>
               </div>
               <div className="flex justify-between items-center">
-                <span className="text-gray-400">স্ট্যাটাস</span>
+                <span className="text-gray-400">Status</span>
                 <span className="text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded">
                   Verified & Credited
                 </span>
@@ -501,7 +522,7 @@ export const AddMoneyPage: React.FC<AddMoneyPageProps> = ({
                 onClick={onGoHome}
                 className="flex-1 bg-black text-white py-3.5 rounded-2xl font-bold text-xs sm:text-sm hover:bg-black/85 transition-all shadow-xs cursor-pointer"
               >
-                গেম টপ-আপ করুন
+                Top-Up Games Now
               </button>
               <button
                 type="button"
@@ -511,7 +532,7 @@ export const AddMoneyPage: React.FC<AddMoneyPageProps> = ({
                 }}
                 className="flex-1 bg-gray-100 text-gray-800 py-3.5 rounded-2xl font-bold text-xs sm:text-sm hover:bg-gray-200 transition-all cursor-pointer"
               >
-                আরও টাকা যোগ করুন
+                Add More Funds
               </button>
             </div>
           </motion.div>
@@ -520,3 +541,4 @@ export const AddMoneyPage: React.FC<AddMoneyPageProps> = ({
     </div>
   );
 };
+
