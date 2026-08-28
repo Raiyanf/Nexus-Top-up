@@ -1,5 +1,6 @@
 {
   "name": "Nexus Topup",
-  "description": "A premium gaming and mobile top-up platform with instant delivery and secure payments.",
-  "requestFramePermissions": []
+  "description": "A premium gaming and mobile top-up platform with instant direct UID delivery, bKash/Nagad/UPI/Card checkout, live order tracking, and Google user profile.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
